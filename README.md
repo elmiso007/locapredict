@@ -250,6 +250,8 @@ A primeira regra que casa decide (ordem da mais crítica para a menos):
 | 4 | `inef ≥ 0.60` (isolado) | **MEDIA** | ❌ não | `Revisar fluxo de atendimento em <produto>` |
 | 5 | nenhuma | **BAIXA** | ❌ não | `Monitorar <produto>` |
 
+<img width="1194" height="326" alt="image" src="https://github.com/user-attachments/assets/cbd64a52-2c8e-4128-bdbe-54c5bd88eea6" />
+
 ### Score composto
 
 Combina os dois scores com bônus de volume — clusters grandes sobem na ordenação mesmo com scores individuais parecidos:
