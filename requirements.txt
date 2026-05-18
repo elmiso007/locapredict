@@ -1,0 +1,6 @@
+psycopg2-binary
+sentence-transformers
+hdbscan
+scikit-learn
+numpy
+slack_sdk

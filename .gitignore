@@ -1,0 +1,14 @@
+logs/
+*.log
+__pycache__/
+*.pyc
+
+# Credenciais e configuracao local
+config.ini
+.env
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
