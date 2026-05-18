@@ -25,6 +25,50 @@ Motor de análise de incidentes do ServiceNow com NLP + clusterização para ide
 - Envia alerta opcional no Slack quando `score_severidade` atinge o limiar `notify_min_score` em `[slack]` (padrão `0.7`; `pontuacao_minima_severidade` também é aceita). O alerta agora exibe **urgência PRB**, **flag "Abrir PRB? ✅ SIM / ❌ não"**, grupo destino, bullets de evidência e descrição rica; insights são ordenados por `score_composto` e o cabeçalho conta `📌 N PRB(s) recomendado(s)`.
 - **Guardião da Saúde do Cliente** (`guardiao_saude_cliente.py`): recorrência por `login_cliente` + `produto` em janela de meses, restrita aos clientes com INC nas últimas 24h; configuração em `[customer_health_guardian]` (chaves em português).
 
+## Arquitetura — fluxo de alto nível
+
+```mermaid
+flowchart TD
+    SN[(ServiceNow<br/>service_now_incidentes)]
+
+    subgraph LP[LocaPredict — pipeline NLP]
+        direction TB
+        A[Embeddings multilíngue PT-BR<br/>+ remoção de stop-words] --> B[HDBSCAN<br/>min_cluster_size=3]
+        B --> C[Scores<br/>severidade + ineficiência]
+        C --> D{prescrever_acao_prb<br/>5 regras em cascata}
+    end
+
+    subgraph GD[Guardião da Saúde do Cliente]
+        direction TB
+        E[Normalização SQL<br/>de login_cliente] --> F[Agregação por<br/>login + produto<br/>HAVING dupla janela]
+    end
+
+    SN --> A
+    SN --> E
+
+    D -->|CRITICA / ALTA| OUT1[✅ Abrir PRB]
+    D -->|MEDIA| OUT2[🔍 Investigar / 🔄 Revisar fluxo]
+    D -->|BAIXA| OUT3[👀 Monitorar]
+
+    OUT1 --> DB1[(locapredict_insights)]
+    OUT2 --> DB1
+    OUT3 --> DB1
+
+    OUT1 --> SL1[📊 Slack rico — 📌 N PRB]
+    OUT2 --> SL1
+    OUT3 --> SL1
+
+    F --> DB2[(guardiao_saude_cliente_snapshots)]
+    F --> SL2[🛡️ Slack Guardião]
+
+    classDef pipeline fill:#e1f5ff,stroke:#0366d6,color:#000
+    classDef storage fill:#fff4d6,stroke:#b08800,color:#000
+    classDef output fill:#d4f3d4,stroke:#22863a,color:#000
+    class A,B,C,D,E,F pipeline
+    class DB1,DB2,SN storage
+    class OUT1,OUT2,OUT3,SL1,SL2 output
+```
+
 ## Pré-requisitos
 
 - Python 3.8+
@@ -299,25 +343,26 @@ O Block Kit não aplica cores no texto; os emojis dão pista visual rápida. Map
 | Título do alerta + contagem | 📊 / 📌 |
 | Intro "Insights com score…" | 📋 |
 
-**Exemplo de cabeçalho do alerta:**
-```
-📊 LocaPredict — alerta PRB · 📌 1 PRB(s) recomendado(s)
-```
+**Exemplo de mensagem completa renderizada no Slack** (dados ofuscados):
 
-**Exemplo de bloco de insight (formato rico, com `PrescricaoPRB`):**
-```
-• 🔺 *Locaweb - Email* — 🔴 *SEV:ALTA* · ✅ *OPS:SAUDAVEL* · 🔺 *PRB:ALTA* — *16* inc.
-  📌 Abrir PRB para Locaweb - Email → grupo *Email nivel 1*
-  Abrir PRB? ✅ SIM · sev *0.89* · inef *0.03* · composto *0.56*
-  _Cluster concentrado em Locaweb - Email com 16 INC(s) semanticamente próximos…_
-  • Volume: 16 incidente(s) no cluster
-  • Severidade ALTA (score 0.89)
-  • Ineficiência SAUDAVEL (score 0.03)
-  • Servidores afetados: 1 — lisa0660
-  📍 _Incidentes em Locaweb - Email: problem nfs client_
-  🎫 INC: `INC8831573, INC8831572, … (+6)`
-```
-<img width="1194" height="326" alt="image" src="https://github.com/user-attachments/assets/cbd64a52-2c8e-4128-bdbe-54c5bd88eea6" />
+> 📊 **LocaPredict — alerta PRB · 📌 1 PRB(s) recomendado(s)**
+>
+> 📋 Insights com score >= **0.70**:
+>
+> • 🔺 **Produto-Exemplo** — 🔴 **SEV:ALTA** · ✅ **OPS:SAUDAVEL** · 🔺 **PRB:ALTA** — **16** inc.
+> &nbsp;&nbsp;📌 Abrir PRB para Produto-Exemplo → grupo **Grupo Nivel 1**
+> &nbsp;&nbsp;Abrir PRB? **✅ SIM** · sev **0.89** · inef **0.03** · composto **0.56**
+> &nbsp;&nbsp;*Cluster concentrado em Produto-Exemplo com 16 INC(s) semanticamente próximos (severidade 0.89). Coesão alta + volume indicam reincidência, mesmo sem ineficiência marcante.*
+> &nbsp;&nbsp;• Volume: 16 incidente(s) no cluster
+> &nbsp;&nbsp;• Severidade ALTA (score 0.89)
+> &nbsp;&nbsp;• Ineficiência SAUDAVEL (score 0.03)
+> &nbsp;&nbsp;• Servidores afetados: 1 — *srv-ofuscado*
+> &nbsp;&nbsp;📍 *Incidentes em Produto-Exemplo: problem nfs client*
+> &nbsp;&nbsp;🎫 INC: `INC*****73, INC*****72, INC*****71, … (+13)`
+
+**Screenshot real do alerta no Slack:**
+
+<img width="1194" height="326" alt="Alerta PRB renderizado no Slack" src="https://github.com/user-attachments/assets/cbd64a52-2c8e-4128-bdbe-54c5bd88eea6" />
 
 ### Retrocompatibilidade do alerta
 
